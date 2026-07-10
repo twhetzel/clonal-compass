@@ -222,3 +222,6 @@ data/
 
 # Generated figures (pipeline outputs)
 figures/
+
+# Generated interpretation reports (pipeline outputs)
+reports/
