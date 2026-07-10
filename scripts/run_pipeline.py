@@ -15,9 +15,13 @@ Run:  .venv/bin/python scripts/run_pipeline.py
 
 from pathlib import Path
 
-import scanpy as sc
+from clonal_compass._warnings import silence_demo_warnings
 
-from clonal_compass import annotate, clonal, cluster, io, plots, qc
+silence_demo_warnings()
+
+import scanpy as sc  # noqa: E402
+
+from clonal_compass import annotate, clonal, cluster, io, plots, qc  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
