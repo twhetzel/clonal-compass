@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import html
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +50,7 @@ class ReportData:
     clusters: list[ClusterReport]
     epitope_overview: list[str]   # dataset-wide predicted specificities
     n_tcr_matched: int            # TCR+ cells with any predicted match
+    epitope_cols: list[str]       # obs columns holding the VDJdb annotations
 
 
 # --------------------------------------------------------------------------- #
@@ -129,7 +131,62 @@ def build_report_data(adata, adata_tcr) -> ReportData:
     if epitope_cols:
         n_matched = int(adata_tcr.obs[epitope_cols].notna().any(axis=1).sum())
 
-    return ReportData(clusters=clusters, epitope_overview=overview, n_tcr_matched=n_matched)
+    return ReportData(
+        clusters=clusters,
+        epitope_overview=overview,
+        n_tcr_matched=n_matched,
+        epitope_cols=epitope_cols,
+    )
+
+
+def write_evidence_json(adata, adata_tcr, data: ReportData, out_path: Path) -> Path:
+    """Serialize per-cluster evidence to a small, standalone JSON file.
+
+    This is the *only* thing the chat interface needs to read — it never has to
+    open the multi-hundred-MB .h5ad objects. Evidence (marker genes, expansion
+    stats, epitope matches, cell counts) is written for EVERY cluster; the
+    hedged interpretation is attached only for the clusters we interpreted
+    (the most-expanded ones), tagged with its source. Requires that
+    build_report_data() has already run (rank_genes_groups + epitope columns).
+    """
+    interp_by_id = {
+        cr.evidence.cluster_id: cr.interpretation for cr in data.clusters
+    }
+
+    clusters = []
+    for group in adata.obs["leiden"].cat.categories:
+        ev = _build_evidence(adata, adata_tcr, group, data.epitope_cols)
+        entry = ev.to_dict()
+        interp = interp_by_id.get(group)
+        entry["interpretation"] = (
+            {"text": interp.text, "source": interp.source} if interp else None
+        )
+        clusters.append(entry)
+    # Most clonally-expanded first — the order a chat interface will care about.
+    clusters.sort(key=lambda c: c["n_expanded_cells"], reverse=True)
+
+    payload = {
+        "dataset": {
+            "name": "10k Human PBMC 5' (GEX + VDJ)",
+            "n_cells": int(adata.n_obs),
+            "n_genes": int(adata.n_vars),
+            "n_clusters": int(adata.obs["leiden"].nunique()),
+            "n_cell_types": int(adata.obs["cell_type"].nunique()),
+            "n_tcr_cells": int((adata.obs["clone_size"] > 0).sum()),
+            "n_tcr_epitope_matched": data.n_tcr_matched,
+        },
+        "epitope_overview": list(data.epitope_overview),
+        "clusters": clusters,
+    }
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, indent=2))
+    print(
+        f"[report] wrote {out_path} "
+        f"({out_path.stat().st_size / 1024:.0f} KB, {len(clusters)} clusters)"
+    )
+    return out_path
 
 
 # --------------------------------------------------------------------------- #

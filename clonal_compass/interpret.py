@@ -75,6 +75,21 @@ class ClusterEvidence:
     top_clone_sizes: list[int]     # largest clone sizes in this cluster
     epitope_hits: list[str] = field(default_factory=list)  # "species: epitope (n cells)"
 
+    def to_dict(self) -> dict:
+        """Compact, JSON-serializable view (for the chat-interface evidence file)."""
+        return {
+            "cluster_id": self.cluster_id,
+            "cell_type": self.cell_type,
+            "n_cells": self.n_cells,
+            "n_with_tcr": self.n_with_tcr,
+            "pct_with_tcr": round(self.pct_with_tcr, 1),
+            "n_expanded_cells": self.n_expanded_cells,
+            "pct_expanded": round(self.pct_expanded, 1),
+            "top_clone_sizes": [int(c) for c in self.top_clone_sizes],
+            "top_markers": [[g, round(s, 2)] for g, s in self.top_markers],
+            "epitope_hits": list(self.epitope_hits),
+        }
+
     def as_prompt(self) -> str:
         markers = ", ".join(f"{g} ({s:+.2f})" for g, s in self.top_markers)
         clones = ", ".join(str(s) for s in self.top_clone_sizes) or "none > 1"

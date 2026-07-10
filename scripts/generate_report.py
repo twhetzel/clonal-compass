@@ -45,6 +45,9 @@ def main() -> None:
     md_path = REPORTS / "cluster_interpretations.md"
     md_path.write_text(report.render_markdown(data))
 
+    # Compact per-cluster evidence for the chat interface (never reads .h5ad).
+    report.write_evidence_json(adata, adata_tcr, data, REPORTS / "cluster_evidence.json")
+
     sources = {cr.interpretation.source for cr in data.clusters}
     print(f"\n[report] interpretation source(s): {', '.join(sorted(sources))}")
     print(f"[report] wrote {html_path}")
