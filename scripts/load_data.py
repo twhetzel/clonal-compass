@@ -10,9 +10,13 @@ data loads cleanly, then prints basic shape info as a sanity check.
 
 from pathlib import Path
 
-import mudata as md
-import scanpy as sc
-import scirpy as ir
+from clonal_compass._warnings import silence_demo_warnings
+
+silence_demo_warnings()
+
+import mudata as md  # noqa: E402
+import scanpy as sc  # noqa: E402
+import scirpy as ir  # noqa: E402
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 GEX_H5 = DATA_DIR / "sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5"

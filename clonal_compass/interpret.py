@@ -53,6 +53,14 @@ SYSTEM_PROMPT = textwrap.dedent(
 
 
 @dataclass
+class Interpretation:
+    """An interpretation plus which path produced it (for unambiguous tagging)."""
+
+    text: str
+    source: str  # "Claude API" or "deterministic fallback"
+
+
+@dataclass
 class ClusterEvidence:
     """Quantitative evidence for one cluster, fed to the interpreter."""
 
@@ -66,6 +74,21 @@ class ClusterEvidence:
     pct_expanded: float            # of TCR+ cells in this cluster
     top_clone_sizes: list[int]     # largest clone sizes in this cluster
     epitope_hits: list[str] = field(default_factory=list)  # "species: epitope (n cells)"
+
+    def to_dict(self) -> dict:
+        """Compact, JSON-serializable view (for the chat-interface evidence file)."""
+        return {
+            "cluster_id": self.cluster_id,
+            "cell_type": self.cell_type,
+            "n_cells": self.n_cells,
+            "n_with_tcr": self.n_with_tcr,
+            "pct_with_tcr": round(self.pct_with_tcr, 1),
+            "n_expanded_cells": self.n_expanded_cells,
+            "pct_expanded": round(self.pct_expanded, 1),
+            "top_clone_sizes": [int(c) for c in self.top_clone_sizes],
+            "top_markers": [[g, round(s, 2)] for g, s in self.top_markers],
+            "epitope_hits": list(self.epitope_hits),
+        }
 
     def as_prompt(self) -> str:
         markers = ", ".join(f"{g} ({s:+.2f})" for g, s in self.top_markers)
@@ -92,18 +115,19 @@ class ClusterEvidence:
         )
 
 
-def interpret_cluster(evidence: ClusterEvidence, use_llm: bool = True) -> str:
-    """Return a hedged plain-language interpretation for one cluster.
+def interpret_cluster(evidence: ClusterEvidence, use_llm: bool = True) -> Interpretation:
+    """Return a hedged plain-language interpretation plus its source path.
 
     Uses the Claude API when an API key is available; otherwise returns a
     deterministic, guardrail-compliant fallback so the pipeline still runs.
+    The `.source` field records which path produced the text.
     """
     if use_llm and os.environ.get("ANTHROPIC_API_KEY"):
         try:
-            return _interpret_with_claude(evidence)
+            return Interpretation(_interpret_with_claude(evidence), "Claude API")
         except Exception as exc:  # noqa: BLE001 - never break the pipeline
             print(f"[interpret] Claude call failed ({exc}); using fallback.")
-    return _interpret_fallback(evidence)
+    return Interpretation(_interpret_fallback(evidence), "deterministic fallback")
 
 
 def _interpret_with_claude(evidence: ClusterEvidence) -> str:
@@ -128,7 +152,6 @@ def _interpret_fallback(evidence: ClusterEvidence) -> str:
     """
     top = ", ".join(f"{g} ({s:+.2f})" for g, s in evidence.top_markers[:5])
     lines = [
-        f"[Generated without the Claude API — deterministic fallback.]",
         f"Cluster {evidence.cluster_id} ({evidence.n_cells} cells) shows highest "
         f"marker-gene scores for {top}, which is consistent with the "
         f"provisional label '{evidence.cell_type}' rather than proving it.",
