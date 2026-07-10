@@ -42,13 +42,21 @@ def load_vdjdb():
         vdjdb.uns["DB"] = {"name": "VDJDB"}  # scirpy keys query results on this
         return vdjdb
 
-    with urllib.request.urlopen(_LATEST_URL) as fh:
-        release_url = fh.read().decode().split()[0]
+    try:
+        with urllib.request.urlopen(_LATEST_URL, timeout=30) as fh:
+            release_url = fh.read().decode().split()[0]
+    except Exception as exc:
+        raise RuntimeError(f"Failed to fetch latest VDJdb release URL: {exc}") from exc
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        urllib.request.urlretrieve(release_url, tmp / "vdjdb.zip")
-        with zipfile.ZipFile(tmp / "vdjdb.zip") as zf:
+        zip_path = tmp / "vdjdb.zip"
+        try:
+            with urllib.request.urlopen(release_url, timeout=30) as response, open(zip_path, "wb") as out_file:
+                out_file.write(response.read())
+        except Exception as exc:
+            raise RuntimeError(f"Failed to download VDJdb release from {release_url}: {exc}") from exc
+        with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(tmp)
         matches = list(tmp.rglob("vdjdb_full.txt"))
         if not matches:
