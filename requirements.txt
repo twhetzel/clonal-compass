@@ -1,0 +1,8 @@
+# Clonal Compass — pinned scientific stack (Python 3.11)
+# A known-good combination for scanpy + scirpy single-cell / AIRR analysis.
+# Do NOT let these auto-upgrade mid-hackathon (see CLAUDE.md).
+numpy==1.26.4
+pandas==2.2.3
+anndata==0.10.9
+scanpy==1.10.3
+scirpy==0.17.2
