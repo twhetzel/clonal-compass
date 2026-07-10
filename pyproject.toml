@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clonal-compass"
+version = "0.1.0"
+description = "Single-cell immune-repertoire co-pilot (Built with Claude: Life Sciences)."
+readme = "README.md"
+requires-python = ">=3.11"
+# Dependencies (with pinned versions) are sourced from requirements.txt so it
+# stays the single source of truth — see [tool.setuptools.dynamic] below.
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+packages = ["clonal_compass"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }

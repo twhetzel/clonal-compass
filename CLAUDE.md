@@ -6,6 +6,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A single-cell immune repertoire co-pilot, built for Built with Claude: Life Sciences (Gladstone / Cerebral Valley hackathon).
 
+## Current status
+
+Days 1–4 of the plan (below) are **done and verified end-to-end**:
+
+- **Day 1** — venv + pinned stack; the 10x demo data loads cleanly.
+- **Day 2** — core pipeline (QC → cluster → annotate → clonal expansion) with UMAPs.
+- **Day 3** — Claude interpretation layer + VDJdb epitope cross-referencing.
+  Both interpretation paths are verified working: the **Claude API path runs
+  live** (needs `ANTHROPIC_API_KEY`), and a deterministic, guardrail-compliant
+  **fallback** runs when no key is set. Each interpretation records which path
+  produced it (`Interpretation.source` → `"Claude API"` / `"deterministic fallback"`).
+- **Day 4** — self-contained HTML + Markdown report, plus a compact per-cluster
+  **evidence bundle** (`reports/cluster_evidence.json`, ~20 KB).
+
+**Active stretch goal:** a Streamlit chat interface (see "Chat interface" below).
+
+## Architecture
+
+Data flows one direction. Each analysis stage is a re-runnable function in the
+`clonal_compass/` package; scripts in `scripts/` orchestrate them:
+
+```
+raw 10x files ──run_pipeline.py──▶ data/processed/*.h5ad + figures/*.png
+data/processed ──generate_report.py──▶ reports/clonal_compass_report.html
+                                       reports/cluster_interpretations.md
+                                       reports/cluster_evidence.json
+```
+
+**Package (`clonal_compass/`):**
+- `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`)
+- `qc` — standard QC filtering (thresholds are function params, not hard-coded)
+- `cluster` — normalize → HVG → PCA → UMAP → Leiden (`flavor="igraph"`; leidenalg is **not** installed)
+- `markers` + `annotate` — marker-gene signatures → per-cluster lineage / T-subset labels via `sc.tl.score_genes`
+- `clonal` — clonotypes by **CDR3 amino-acid identity** (`ir.tl.define_clonotype_clusters`, aliased to `clone_id`) → clone size + expansion, merged onto GEX by barcode
+- `plots` — UMAP PNGs (captioned)
+- `interpret` — `ClusterEvidence`, `Interpretation`, `interpret_cluster()` (Claude API + fallback). Guardrails live in `SYSTEM_PROMPT`. Model `claude-opus-4-8`, adaptive thinking, effort high.
+- `epitope` — VDJdb load/annotate + `hits_for_cells`
+- `report` — `build_report_data()` (rank markers + annotate epitopes + pick notable clusters + interpret), `render_html` / `render_markdown`, `write_evidence_json`
+- `_warnings.silence_demo_warnings()` — call first in every entry script for a clean demo console
+
+**Scripts (`scripts/`):** `load_data.py` (Day-1 sanity), `run_pipeline.py`
+(Day-2 pipeline), `interpret_clusters.py` (Day-3 console inspection),
+`generate_report.py` (Day-4 artifacts + evidence bundle).
+
+**Run the whole thing:**
+```
+.venv/bin/python scripts/run_pipeline.py       # → data/processed + figures
+.venv/bin/python scripts/generate_report.py    # → reports/*
+```
+Set `ANTHROPIC_API_KEY` first for live Claude interpretations (else fallback).
+Outputs are all gitignored: `data/processed/`, `figures/`, `reports/`, and
+`data/reference/vdjdb.h5ad` (cached VDJdb reference).
+
+### Gotchas & decisions already made
+- **Clonotypes are amino-acid based.** We switched from exact-nt
+  `define_clonotypes` to `define_clonotype_clusters` (CDR3 aa identity) — more
+  defensible for expansion claims (won't over-count silent mutations).
+- **scirpy's `ir.datasets.vdjdb()` is broken** on current VDJdb releases (reads
+  `vdjdb_full.txt` from the archive root, but it's now nested in a dated
+  subdir). `epitope.load_vdjdb()` reimplements the loader with a recursive glob
+  and caches to `data/reference/vdjdb.h5ad`.
+- **Epitope matches use `strategy="unique-only"`**; scirpy's literal
+  `"ambiguous"` (CDR3 matched multiple epitopes) is treated as "no match".
+- **Notable clusters are chosen by number of expanded cells**, not percent.
+- The VDJdb layer genuinely finds public epitopes (GILGFVFTL flu, NLVPMVATV
+  CMV, LLWNGPMAV YFV) — but in this healthy donor they're all in singleton
+  clones, so the expanded-clone report correctly shows "no match".
+
+## Chat interface (planned stretch goal)
+
+A lightweight **Streamlit** app for asking natural-language questions about the
+clusters/clones. Design constraints already decided:
+
+- **Reads only `reports/cluster_evidence.json`** — never opens the `.h5ad`
+  objects (those are hundreds of MB; the JSON is ~20 KB and loads instantly).
+  Regenerate the bundle with `generate_report.py`.
+- Uses the Anthropic **tool-calling** loop: expose tools that query the
+  evidence bundle (e.g. `get_cluster`, `list_expanded_clusters`,
+  `get_epitope_matches`) so Claude grounds every answer in the data rather than
+  free-associating.
+- **Reuses the exact same guardrails** — import `interpret.SYSTEM_PROMPT`; do
+  not fork a second, looser prompt. Same model/effort as `interpret.py`.
+- Additive only: must not modify the working Day-1–4 pipeline.
+
 ## Environment & commands
 
 Day 1 is done: a dedicated venv exists with a pinned, known-good stack.
@@ -13,10 +97,13 @@ Day 1 is done: a dedicated venv exists with a pinned, known-good stack.
 - **Python:** 3.11.9 (via pyenv). The system `python3` is 3.8 and too old —
   always use the venv.
 - **Setup / reinstall:**
-  `~/.pyenv/versions/3.11.9/bin/python3.11 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt`
+  `~/.pyenv/versions/3.11.9/bin/python3.11 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt && .venv/bin/python -m pip install -e .`
 - **Run anything in the env:** `.venv/bin/python <script>` (or `source .venv/bin/activate`).
+  The `pip install -e .` step makes `clonal_compass` importable — **no `PYTHONPATH=.` prefix needed**.
 - **Pinned deps** live in `requirements.txt`: numpy 1.26.4, pandas 2.2.3,
-  anndata 0.10.9, scanpy 1.10.3, scirpy 0.17.2. Don't let these auto-upgrade.
+  anndata 0.10.9, scanpy 1.10.3, scirpy 0.17.2, anthropic 0.116.0. `pyproject.toml`
+  reads its dependencies from `requirements.txt`, so it stays the single pin source.
+  Don't let these auto-upgrade.
 - No test/lint tooling yet — add commands here when introduced.
 
 ### Apple Silicon gotcha (parasail)
@@ -60,6 +147,10 @@ Output: a reproducible notebook/script + a short written report (and,
 if time allows, a lightweight dashboard).
 
 ## Timeframe: 4 days. Hard scope discipline required.
+
+> **Status: Days 1–4 are all complete** (see "Current status" up top). The
+> per-day plan and starter prompts below are retained as reference for what was
+> asked and why. New work is the chat-interface stretch goal, not these days.
 
 - **Day 1** — Environment + data loading ONLY. No analysis code.
   This absorbs the single biggest risk (scirpy/Scanpy dependency conflicts),
