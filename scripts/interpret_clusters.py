@@ -43,7 +43,8 @@ def build_evidence(adata, adata_tcr, group, epitope_cols):
     top_clone_sizes = (
         sorted(sub.loc[sub["clone_size"] > 1, "clone_size"].astype(int), reverse=True)[:5]
     )
-    cell_type = sub["cell_type"].mode().iat[0]
+    cell_type_mode = sub["cell_type"].mode()
+    cell_type = str(cell_type_mode.iat[0]) if not cell_type_mode.empty else "Unknown"
     hits = epitope.hits_for_cells(adata_tcr, barcodes, epitope_cols)
 
     return interpret.ClusterEvidence(
