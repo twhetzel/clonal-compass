@@ -221,29 +221,60 @@ def _run_tool(bundle: dict, name: str, tool_input: dict) -> str:
 # --------------------------------------------------------------------------- #
 # Public entry point
 # --------------------------------------------------------------------------- #
-def ask_question(question: str, evidence_bundle: dict, use_llm: bool = True) -> Interpretation:
+def ask_question(
+    question: str,
+    evidence_bundle: dict,
+    history: list[dict] | None = None,
+    use_llm: bool = True,
+) -> Interpretation:
     """Answer a question about the dataset, grounded in the evidence bundle.
 
     Runs Claude's tool-use loop so the model looks up only the clusters it needs
     (via `TOOLS`) instead of receiving the whole bundle. Returns an
     `Interpretation` whose `.source` records the path taken. Falls back to a
     deterministic, guardrail-compliant response when no API key is available.
+
+    `history` is the prior conversation as an ordered list of
+    ``{"role": "user"|"assistant", "content": str}`` turns (NOT including the
+    current `question`). Passing it lets Claude resolve follow-up references like
+    "that cluster" or "it" to what was discussed earlier. The deterministic
+    fallback ignores history — without the model it cannot resolve references.
     """
     import os
 
     if use_llm and os.environ.get("ANTHROPIC_API_KEY"):
         try:
-            return Interpretation(_ask_with_claude(question, evidence_bundle), "Claude API")
+            return Interpretation(
+                _ask_with_claude(question, evidence_bundle, history), "Claude API"
+            )
         except Exception as exc:  # noqa: BLE001 - never crash the chat UI
             print(f"[chat] Claude call failed ({exc}); using fallback.")
     return Interpretation(_ask_fallback(question, evidence_bundle), "deterministic fallback")
 
 
-def _ask_with_claude(question: str, bundle: dict) -> str:
+def _history_messages(history: list[dict] | None) -> list[dict]:
+    """Convert prior chat turns into Claude `messages` entries.
+
+    Only the plain-text of each prior user/assistant turn is carried forward —
+    not the tool_use / tool_result blocks from earlier turns. The text answers
+    are enough context to resolve references, and keeping them flat avoids
+    having to re-pair tool blocks across turns. Turns are assumed already
+    alternating user/assistant (as `st.session_state` produces them).
+    """
+    out = []
+    for turn in history or []:
+        role = turn.get("role")
+        content = turn.get("content")
+        if role in ("user", "assistant") and content:
+            out.append({"role": role, "content": content})
+    return out
+
+
+def _ask_with_claude(question: str, bundle: dict, history: list[dict] | None = None) -> str:
     import anthropic
 
     client = anthropic.Anthropic()
-    messages = [{"role": "user", "content": question}]
+    messages = _history_messages(history) + [{"role": "user", "content": question}]
 
     for _ in range(_MAX_TOOL_ROUNDS):
         response = client.messages.create(
