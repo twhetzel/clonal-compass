@@ -56,7 +56,9 @@ def load_vdjdb():
         df = pd.read_csv(matches[0], sep="\t", low_memory=False)
 
     cells = []
-    for idx, row in df.iterrows():
+    # to_dict("records") avoids building a pandas Series per row — much faster
+    # than iterrows() over the ~140k VDJdb entries.
+    for idx, row in enumerate(df.to_dict("records")):
         cell = AirrCell(cell_id=str(idx))
         if not pd.isnull(row["cdr3.alpha"]):
             chain = AirrCell.empty_chain_dict()
