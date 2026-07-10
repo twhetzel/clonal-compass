@@ -219,3 +219,6 @@ __marimo__/
 
 # Project data (downloaded 10x datasets — do not commit large binaries)
 data/
+
+# Generated figures (pipeline outputs)
+figures/
