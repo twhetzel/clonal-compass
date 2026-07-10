@@ -23,6 +23,11 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 # 3. Install the pinned dependencies
 pip install -r requirements.txt
+
+# 4. Install clonal_compass as an editable package (so `import clonal_compass`
+#    works from anywhere — no PYTHONPATH needed). Dependencies are read from
+#    requirements.txt, so this step is safe to run right after it.
+pip install -e .
 ```
 
 If `python3.11` isn't on your PATH, point at it explicitly, e.g. via pyenv:
