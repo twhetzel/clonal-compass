@@ -20,7 +20,11 @@ Days 1–4 of the plan (below) are **done and verified end-to-end**:
 - **Day 4** — self-contained HTML + Markdown report, plus a compact per-cluster
   **evidence bundle** (`reports/cluster_evidence.json`, ~20 KB).
 
-**Active stretch goal:** a Streamlit chat interface (see "Chat interface" below).
+**Stretch goal — DONE:** the Streamlit chat interface is built and verified
+(see "Chat interface" below). It grounds every answer in the evidence bundle
+via Claude's tool-use loop, tags each answer with its source path, and now
+carries conversation history so follow-up references ("that cluster", "it")
+resolve across turns.
 
 ## Architecture
 
@@ -74,21 +78,52 @@ Outputs are all gitignored: `data/processed/`, `figures/`, `reports/`, and
   CMV, LLWNGPMAV YFV) — but in this healthy donor they're all in singleton
   clones, so the expanded-clone report correctly shows "no match".
 
-## Chat interface (planned stretch goal)
+## Chat interface (DONE)
 
 A lightweight **Streamlit** app for asking natural-language questions about the
-clusters/clones. Design constraints already decided:
+clusters/clones. Built and verified end-to-end.
 
+**Run it:**
+```
+.venv/bin/streamlit run app.py
+```
+Set `ANTHROPIC_API_KEY` first for live Claude answers (else the deterministic
+fallback runs). `streamlit==1.59.1` is pinned in `requirements.txt`.
+
+**Pieces:**
+- `clonal_compass/chat.py` — the grounded Q&A layer. `load_evidence_bundle()`
+  reads the JSON; `ask_question(question, evidence_bundle, history=None)` runs
+  Claude's tool-use loop and returns an `Interpretation(text, source)` just like
+  `interpret.interpret_cluster` (source → `"Claude API"` / `"deterministic
+  fallback"`).
+- `scripts/ask.py` — one-shot CLI to ask a question from the terminal.
+- `app.py` — the Streamlit chat UI: scrollable history, a per-answer **source
+  badge** (green = `Claude API`, amber = `deterministic fallback`), and a
+  sidebar dataset summary. Loads the bundle once via `@st.cache_data`.
+
+**Design constraints (all honored):**
 - **Reads only `reports/cluster_evidence.json`** — never opens the `.h5ad`
   objects (those are hundreds of MB; the JSON is ~20 KB and loads instantly).
   Regenerate the bundle with `generate_report.py`.
-- Uses the Anthropic **tool-calling** loop: expose tools that query the
-  evidence bundle (e.g. `get_cluster`, `list_expanded_clusters`,
-  `get_epitope_matches`) so Claude grounds every answer in the data rather than
-  free-associating.
-- **Reuses the exact same guardrails** — import `interpret.SYSTEM_PROMPT`; do
-  not fork a second, looser prompt. Same model/effort as `interpret.py`.
-- Additive only: must not modify the working Day-1–4 pipeline.
+- Uses the Anthropic **tool-calling** loop: `chat.TOOLS` exposes
+  `get_dataset_overview`, `list_clusters`, `get_cluster_evidence`,
+  `get_epitope_matches` so Claude grounds every answer in the data rather than
+  free-associating. Bounded by `_MAX_TOOL_ROUNDS = 6`.
+- **Reuses the exact same guardrails** — `CHAT_SYSTEM_PROMPT` is
+  `interpret.SYSTEM_PROMPT` + tool-use operating instructions only; no second,
+  looser prompt. Same model/effort as `interpret.py`.
+- Additive only: does not modify the working Day-1–4 pipeline.
+
+**Conversation history.** `ask_question` takes an optional `history` — the prior
+turns as `[{"role": "user"|"assistant", "content": str}, ...]`, **not** including
+the current question — and seeds the tool-use loop with them so follow-ups like
+"what about that cluster's marker genes?" resolve "that"/"it" to what was
+discussed. Only the plain **text** of each prior turn is carried forward, not the
+earlier tool_use/tool_result blocks (enough to resolve references, and avoids
+re-pairing tool blocks across turns). `app.py` passes
+`st.session_state.messages` (captured *before* appending the new question) as
+`history`. The deterministic fallback ignores history — without the model it
+can't resolve references, and it says so.
 
 ## Environment & commands
 
