@@ -70,6 +70,7 @@ class DatasetSpec:
     display_name: str
     suffix: str  # appended to every output filename ("" keeps PBMC paths stable)
     loader: Callable  # -> (adata_gex, adata_tcr)
+    marker_set: str  # key into markers.MARKER_SETS for annotation signatures
 
 
 DATASETS: dict[str, DatasetSpec] = {
@@ -78,12 +79,14 @@ DATASETS: dict[str, DatasetSpec] = {
         display_name="10k Human PBMC 5' (GEX + VDJ)",
         suffix="",
         loader=_load_pbmc,
+        marker_set="pbmc",
     ),
     "cancer": DatasetSpec(
         key="cancer",
         display_name="3k tumor-infiltrating T cells (Wu et al. 2020)",
         suffix="_cancer",
         loader=_load_cancer,
+        marker_set="cancer",
     ),
 }
 

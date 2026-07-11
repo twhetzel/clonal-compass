@@ -28,7 +28,7 @@ silence_demo_warnings()
 
 import scanpy as sc  # noqa: E402
 
-from clonal_compass import annotate, clonal, cluster, io, plots, qc  # noqa: E402
+from clonal_compass import annotate, clonal, cluster, io, markers, plots, qc  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "data" / "processed"
@@ -56,8 +56,14 @@ def main(dataset: str = "pbmc") -> None:
         title="Leiden clusters (transcriptome)",
     )
 
-    # --- Stage 3: annotate ---
-    adata = annotate.annotate_clusters(adata)
+    # --- Stage 3: annotate (marker set chosen per dataset) ---
+    mset = markers.MARKER_SETS[spec.marker_set]
+    print(f"[annotate] using {spec.marker_set!r} marker set")
+    adata = annotate.annotate_clusters(
+        adata,
+        lineage_markers=mset.lineage,
+        tcell_subset_markers=mset.tcell_subset,
+    )
     plots.save_umap(
         adata, "cell_type", FIG / f"umap_celltype{sfx}.png",
         title="Cell type (marker-based)",

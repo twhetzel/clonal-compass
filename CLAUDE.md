@@ -58,7 +58,7 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
   datasets' outputs side by side.
 - `qc` — standard QC filtering (thresholds are function params, not hard-coded)
 - `cluster` — normalize → HVG → PCA → UMAP → Leiden (`flavor="igraph"`; leidenalg is **not** installed)
-- `markers` + `annotate` — marker-gene signatures → per-cluster lineage / T-subset labels via `sc.tl.score_genes`
+- `markers` + `annotate` — marker-gene signatures → per-cluster lineage / T-subset labels via `sc.tl.score_genes`. Signatures live in a **registry** (`markers.MARKER_SETS`: `pbmc` broad-lineage/subset panel, `cancer` TIL-state panel) selected per dataset via `DatasetSpec.marker_set`. `annotate_clusters()` takes the two signature dicts as params (default = PBMC); its scoring/labelling logic is unchanged and marker-set-agnostic.
 - `clonal` — clonotypes by **CDR3 amino-acid identity** (`ir.tl.define_clonotype_clusters`, aliased to `clone_id`) → clone size + expansion, merged onto GEX by barcode
 - `plots` — UMAP PNGs (captioned)
 - `interpret` — `ClusterEvidence`, `Interpretation`, `interpret_cluster()` (Claude API + fallback). Guardrails live in `SYSTEM_PROMPT`. Model `claude-opus-4-8`, adaptive thinking, effort high.
@@ -89,11 +89,27 @@ Outputs are all gitignored: `data/processed/`, `figures/`, `reports/`, and
 - Artifacts are suffixed so datasets coexist: PBMC keeps the original unsuffixed
   names (`gex_annotated.h5ad`, `cluster_evidence.json`, `umap_*.png`, …); cancer
   writes the `_cancer` variants (`cluster_evidence_cancer.json`, etc.).
-- **Cancer annotation is imperfect by design.** `markers.py` signatures are
-  PBMC-lineage-tuned, so the pure-T-cell tumor set gets mislabeled (NK/B/DC).
-  This is the *unchanged* pipeline running as-is; fixing it means editing
-  annotation logic (a deliberate non-goal here). The clonal-expansion and
-  epitope numbers — the point of the second dataset — are unaffected.
+- **Per-dataset marker sets.** The cancer path uses a **TIL-state signature
+  panel** (`markers.CANCER_*`), not the PBMC lineage panel. Two design points
+  worth knowing:
+  - Its lineage layer is a **single `T cell` entry** on purpose. Every cell in
+    this dataset is a T cell, and `score_genes` measures enrichment *against a
+    similarly-expressed background*, so in a pure-T population the pan-T score
+    has no contrast and lands near zero — a multi-lineage argmax then gets
+    decided by noise and mislabels real T cells as NK/B/myeloid (the old
+    behavior). Asserting the one true lineage routes every cluster into the
+    subset panel, where the real discrimination happens.
+  - The subset panel resolves tumor-relevant states the PBMC panel can't:
+    cytotoxic effector, exhausted/terminal, Treg, Tfh (CXCL13+), tissue-resident
+    memory, proliferating. Validated against canonical markers (Treg→FOXP3,
+    Tfh→CXCL13, TRM→ZNF683/ITGAE, cytotoxic→GZMB/GNLY, cycling→MKI67/TOP2A).
+    `STMN1` is deliberately **excluded** from the cycling signature — it's broadly
+    expressed in activated effectors and inflates the score for non-dividing cells.
+  - Nice consequence: the most clonally-expanded clusters now correctly label as
+    **CD8 cytotoxic effector** (they were mislabeled "NK" under the PBMC panel).
+  - Weakly-differentiated clusters can still land on a narrow-margin call (an
+    inherent property of score-based argmax, same as the PBMC path); the hedged
+    report + per-cluster `rank_genes_groups` are the backstop.
 - `wu2020_3k` has **0 `MT-` genes**, so the `max_pct_mt` QC filter is a harmless
   no-op on it (2,992/3,000 cells kept on default thresholds).
 
@@ -131,18 +147,40 @@ fallback runs). `streamlit==1.59.1` is pinned in `requirements.txt`.
   `interpret.interpret_cluster` (source → `"Claude API"` / `"deterministic
   fallback"`).
 - `scripts/ask.py` — one-shot CLI to ask a question from the terminal.
-- `app.py` — the Streamlit chat UI: scrollable history, a per-answer **source
-  badge** (green = `Claude API`, amber = `deterministic fallback`), and a
-  sidebar dataset summary. Loads the bundle once via `@st.cache_data`.
+- `app.py` — the Streamlit chat UI: a **sidebar dataset selector**, scrollable
+  history, a per-answer **source badge** (green = `Claude API`, amber =
+  `deterministic fallback`), and a sidebar dataset summary. Loads each bundle via
+  `@st.cache_data` (keyed by path).
+
+**Multi-dataset selection.** `app.py` discovers which `reports/cluster_evidence{suffix}.json`
+bundles exist (one per `io.DATASETS` entry) and offers them in a sidebar
+`selectbox` labelled by `display_name`. The active dataset's `name` + stats show
+in the sidebar and an `st.info` banner in the main pane, so it's always clear
+which dataset is loaded. Because each chat is grounded in ONE dataset, **switching
+datasets clears the conversation** (`st.session_state.messages`) — otherwise a
+follow-up like "that cluster" would resolve against the wrong dataset's clusters.
+Discovery is uncached (cheap `stat()`) so a newly-generated bundle appears on the
+next rerun.
 
 **Design constraints (all honored):**
-- **Reads only `reports/cluster_evidence.json`** — never opens the `.h5ad`
-  objects (those are hundreds of MB; the JSON is ~20 KB and loads instantly).
-  Regenerate the bundle with `generate_report.py`.
+- **Reads only the evidence bundle(s)** (`reports/cluster_evidence*.json`) — never
+  opens the `.h5ad` objects (those are hundreds of MB; each JSON is ~20 KB and
+  loads instantly). Regenerate with `generate_report.py [--dataset …]`.
 - Uses the Anthropic **tool-calling** loop: `chat.TOOLS` exposes
   `get_dataset_overview`, `list_clusters`, `get_cluster_evidence`,
   `get_epitope_matches` so Claude grounds every answer in the data rather than
   free-associating. Bounded by `_MAX_TOOL_ROUNDS = 6`.
+- **Epitope tool has two scopes — don't confuse them.** `get_epitope_matches`
+  called **without** `cluster_id` returns the **dataset-wide** matches (all TCR+
+  cells: the total count + every predicted specificity); called **with** a
+  `cluster_id` it returns only that cluster's **expanded-clone** hits (a strict
+  subset). A general "are there any epitope matches?" must use the no-cluster
+  form — the most-expanded clusters often have zero expanded-clone hits even when
+  the dataset has many (e.g. cancer: clusters 4/5 empty, but 42 matched cells
+  dataset-wide). The per-cluster empty note and a system-prompt line both warn
+  against generalizing a single cluster's empty list to the whole dataset. (This
+  was a real bug: the tool used to be per-cluster-only, so the chat wrongly
+  answered "no epitope matches".)
 - **Reuses the exact same guardrails** — `CHAT_SYSTEM_PROMPT` is
   `interpret.SYSTEM_PROMPT` + tool-use operating instructions only; no second,
   looser prompt. Same model/effort as `interpret.py`.

@@ -40,6 +40,10 @@ CHAT_SYSTEM_PROMPT = SYSTEM_PROMPT + textwrap.dedent(
     - Call `list_clusters` or `get_dataset_overview` first when you need to find
       the relevant cluster(s); then `get_cluster_evidence` /
       `get_epitope_matches` for the specifics.
+    - For a general epitope question ("are there any epitope matches?"), call
+      `get_epitope_matches` WITHOUT a cluster_id to get the dataset-wide result.
+      A single cluster's empty epitope list never means the dataset has none —
+      per-cluster hits cover only that cluster's expanded clones.
     - If the tools do not contain what is needed to answer, say so plainly
       rather than guessing.
     - All the hedging rules above still apply: cite the metric behind each
@@ -117,19 +121,29 @@ TOOLS = [
     {
         "name": "get_epitope_matches",
         "description": (
-            "Predicted VDJdb epitope matches (exact CDR3 aa identity) for one "
-            "cluster's expanded clones. Returns an empty list when there is no "
-            "match, which is a normal, valid result — not an error."
+            "Predicted VDJdb epitope matches (exact CDR3 aa identity; a database "
+            "hit, NOT confirmed reactivity).\n"
+            "- Called WITHOUT cluster_id: returns the DATASET-WIDE matches across "
+            "all TCR+ cells — the total matched-cell count and every predicted "
+            "specificity with how many cells carry it. Use this form for general "
+            "questions like 'are there any epitope matches?'.\n"
+            "- Called WITH a cluster_id: returns matches for that ONE cluster's "
+            "EXPANDED clones only — a strict subset. A cluster can be empty here "
+            "while the dataset still has many matches, so never generalize a "
+            "single cluster's empty result to the whole dataset.\n"
+            "An empty result is a normal, valid outcome, not an error."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "cluster_id": {
                     "type": "string",
-                    "description": "The cluster id, e.g. '6'.",
+                    "description": (
+                        "Optional. Restrict to one cluster's expanded clones, "
+                        "e.g. '6'. Omit for dataset-wide matches."
+                    ),
                 }
             },
-            "required": ["cluster_id"],
         },
     },
 ]
@@ -179,7 +193,24 @@ def _tool_get_cluster_evidence(bundle: dict, cluster_id: str) -> dict:
     return c
 
 
-def _tool_get_epitope_matches(bundle: dict, cluster_id: str) -> dict:
+def _tool_get_epitope_matches(bundle: dict, cluster_id: str | None = None) -> dict:
+    # No cluster id -> dataset-wide matches across ALL TCR+ cells (not just
+    # expanded clones). This is the answer to "are there any epitope matches?".
+    if cluster_id is None:
+        overview = bundle.get("epitope_overview", [])
+        n_matched = bundle.get("dataset", {}).get("n_tcr_epitope_matched", 0)
+        return {
+            "scope": "dataset-wide (all TCR+ cells)",
+            "n_tcr_epitope_matched": n_matched,
+            "predicted_specificities": overview,
+            "note": (
+                "Predicted specificities (VDJdb CDR3 aa hits), not confirmed "
+                "reactivity." if overview else
+                "No VDJdb matches dataset-wide — a normal, valid outcome, not a "
+                "failure."
+            ),
+        }
+
     c = _find_cluster(bundle, cluster_id)
     if c is None:
         return {
@@ -188,13 +219,15 @@ def _tool_get_epitope_matches(bundle: dict, cluster_id: str) -> dict:
         }
     hits = c.get("epitope_hits", [])
     return {
+        "scope": f"cluster {c.get('cluster_id')} — expanded clones only",
         "cluster_id": c.get("cluster_id"),
         "epitope_hits": hits,
         "note": (
             "Predicted specificities (VDJdb CDR3 aa hits), not confirmed "
             "reactivity." if hits else
-            "No VDJdb match for this cluster's expanded clones — a normal, "
-            "valid outcome, not a failure."
+            "No VDJdb match for THIS cluster's expanded clones — a normal, valid "
+            "outcome. Dataset-wide matches may still exist; call this tool "
+            "without a cluster_id to check before concluding there are none."
         ),
     }
 
