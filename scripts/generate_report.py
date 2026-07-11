@@ -32,6 +32,10 @@ REPORTS.mkdir(parents=True, exist_ok=True)
 
 
 def main(dataset: str = "pbmc") -> None:
+    if dataset not in io.DATASETS:
+        raise ValueError(
+            f"unknown dataset {dataset!r}; choose one of {sorted(io.DATASETS)}"
+        )
     spec = io.DATASETS[dataset]
     sfx = spec.suffix
 
