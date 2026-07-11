@@ -20,6 +20,16 @@ Days 1–4 of the plan (below) are **done and verified end-to-end**:
 - **Day 4** — self-contained HTML + Markdown report, plus a compact per-cluster
   **evidence bundle** (`reports/cluster_evidence.json`, ~20 KB).
 
+**Second dataset added (additive, verified):** the same pipeline now runs on
+scirpy's built-in **"3k T cells from cancer"** (Wu et al. 2020, tumor-infiltrating
+T cells across lung/renal/colon/endometrial). Select with `--dataset {pbmc,cancer}`
+on both pipeline scripts (default `pbmc`); each dataset's artifacts get a filename
+suffix (`""` for PBMC, `_cancer` for cancer) so both coexist. No stage logic
+changed. Expansion is decisively different — cancer: **22.7%** of TCR+ cells in
+expanded clones (largest clone 20); PBMC baseline: **2.8%** (largest clone 9) —
+i.e. real tumor-driven clonal expansion, not healthy-donor noise. See
+"Dataset selection" below.
+
 **Active stretch goal:** a Streamlit chat interface (see "Chat interface" below).
 
 ## Architecture
@@ -35,7 +45,12 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
 ```
 
 **Package (`clonal_compass/`):**
-- `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`)
+- `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`). Also a small
+  **dataset registry** (`DatasetSpec`, `DATASETS`, `load_dataset(key)`) that
+  returns a uniform `(gex, tcr, spec)` for either `pbmc` (files on disk) or
+  `cancer` (scirpy's `wu2020_3k()` MuData, split into GEX + AIRR AnnData). `spec`
+  carries the display name + filename `suffix` the scripts use to keep both
+  datasets' outputs side by side.
 - `qc` — standard QC filtering (thresholds are function params, not hard-coded)
 - `cluster` — normalize → HVG → PCA → UMAP → Leiden (`flavor="igraph"`; leidenalg is **not** installed)
 - `markers` + `annotate` — marker-gene signatures → per-cluster lineage / T-subset labels via `sc.tl.score_genes`
@@ -52,12 +67,30 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
 
 **Run the whole thing:**
 ```
-.venv/bin/python scripts/run_pipeline.py       # → data/processed + figures
-.venv/bin/python scripts/generate_report.py    # → reports/*
+.venv/bin/python scripts/run_pipeline.py       # → data/processed + figures  (PBMC, default)
+.venv/bin/python scripts/generate_report.py    # → reports/*                  (PBMC, default)
+.venv/bin/python scripts/run_pipeline.py    --dataset cancer   # Wu 2020 tumor T cells
+.venv/bin/python scripts/generate_report.py --dataset cancer   # → reports/*_cancer.*
 ```
 Set `ANTHROPIC_API_KEY` first for live Claude interpretations (else fallback).
 Outputs are all gitignored: `data/processed/`, `figures/`, `reports/`, and
 `data/reference/vdjdb.h5ad` (cached VDJdb reference).
+
+### Dataset selection
+- Both `run_pipeline.py` and `generate_report.py` take `--dataset {pbmc,cancer}`
+  (default `pbmc`). The choice flows through `io.load_dataset()`; **no stage
+  function changed** — QC → cluster → annotate → clonal → evidence bundle are
+  identical for both.
+- Artifacts are suffixed so datasets coexist: PBMC keeps the original unsuffixed
+  names (`gex_annotated.h5ad`, `cluster_evidence.json`, `umap_*.png`, …); cancer
+  writes the `_cancer` variants (`cluster_evidence_cancer.json`, etc.).
+- **Cancer annotation is imperfect by design.** `markers.py` signatures are
+  PBMC-lineage-tuned, so the pure-T-cell tumor set gets mislabeled (NK/B/DC).
+  This is the *unchanged* pipeline running as-is; fixing it means editing
+  annotation logic (a deliberate non-goal here). The clonal-expansion and
+  epitope numbers — the point of the second dataset — are unaffected.
+- `wu2020_3k` has **0 `MT-` genes**, so the `max_pct_mt` QC filter is a harmless
+  no-op on it (2,992/3,000 cells kept on default thresholds).
 
 ### Gotchas & decisions already made
 - **Clonotypes are amino-acid based.** We switched from exact-nt
@@ -114,8 +147,11 @@ them the `pip install` fails on `parasail` with "autoreconf -fi failed".
 
 ## Data
 
-10x Genomics **10k Human PBMCs, 5' v2 (GEX + VDJ)** demo dataset. Files live
-in `data/raw/` (gitignored). Re-download with:
+Two datasets are wired up (select with `--dataset`; see "Dataset selection").
+
+**1. `pbmc` (default)** — 10x Genomics **10k Human PBMCs, 5' v2 (GEX + VDJ)**
+demo dataset (healthy donor). Files live in `data/raw/` (gitignored). Re-download
+with:
 
 ```
 curl -o data/raw/sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5 \
@@ -132,6 +168,13 @@ directory (not a `_t` subdirectory — that path 403s).
 `MuData`. Expected output: 10,548 cells × 36,601 genes, 5,328 TCR contigs,
 5,308 paired (~50%). Note: scirpy's old `merge_with_ir` was removed in
 v0.13 — use `MuData({"gex": ..., "airr": ...})`.
+
+**2. `cancer`** — scirpy's built-in **"3k T cells from cancer"** (Wu et al.
+2020): 3,000 tumor-infiltrating T cells downsampled across lung/renal/colon/
+endometrial patients (Tumor/NAT/Blood). No download step — fetched and cached
+by scirpy via `ir.datasets.wu2020_3k()` (a MuData with `gex` raw-count +
+`airr` modalities; `io._load_cancer()` splits them). All 3,000 cells are
+TCR-containing and already barcode-paired.
 
 ## Project brief
 
