@@ -7,3 +7,4 @@ anndata==0.10.9
 scanpy==1.10.3
 scirpy==0.17.2
 anthropic==0.116.0
+streamlit==1.59.1
