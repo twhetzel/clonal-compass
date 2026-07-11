@@ -271,8 +271,8 @@ def render_html(data: ReportData, figures_dir: Path, meta: dict, suffix: str = "
     figs = []
     for name, caption in FIGURES:
         # Insert the dataset suffix before the extension (umap_x.png -> umap_x_cancer.png).
-        stem, ext = name.rsplit(".", 1)
-        path = figures_dir / f"{stem}{suffix}.{ext}"
+        p = Path(name)
+        path = figures_dir / f"{p.stem}{suffix}{p.suffix}"
         if not path.exists():
             continue
         figs.append(
