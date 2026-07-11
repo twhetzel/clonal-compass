@@ -1,15 +1,18 @@
 """Chat interface, step 3: a Streamlit chat UI over the evidence bundle.
 
-Loads `reports/cluster_evidence.json` once on startup and answers each question
-via `chat.ask_question`, which grounds every answer in the bundle through
-Claude's tool-use loop (or a deterministic fallback when no API key is set).
+Discovers which per-dataset evidence bundles exist under `reports/`
+(`cluster_evidence{suffix}.json`, one per entry in `io.DATASETS`), lets the user
+pick one in the sidebar, and answers each question via `chat.ask_question` —
+which grounds every answer in the selected bundle through Claude's tool-use loop
+(or a deterministic fallback when no API key is set). Switching datasets clears
+the conversation, since each chat is grounded in a single dataset.
 
 Run:
   .venv/bin/streamlit run app.py
 
 No deployment needed — this is a local demo tool. It reads only the ~20 KB
-evidence bundle, never the .h5ad objects. Regenerate the bundle with
-`scripts/generate_report.py`.
+evidence bundles, never the .h5ad objects. Regenerate them with
+`scripts/generate_report.py [--dataset pbmc|cancer]`.
 """
 
 from __future__ import annotations
@@ -22,9 +25,9 @@ from clonal_compass._warnings import silence_demo_warnings
 
 silence_demo_warnings()
 
-from clonal_compass import chat  # noqa: E402
+from clonal_compass import chat, io  # noqa: E402
 
-BUNDLE_PATH = Path(__file__).resolve().parent / "reports" / "cluster_evidence.json"
+REPORTS_DIR = Path(__file__).resolve().parent / "reports"
 
 # Source badge styling: green = grounded live Claude answer, amber = fallback.
 _BADGE = {
@@ -33,9 +36,27 @@ _BADGE = {
 }
 
 
+def _bundle_path(spec: io.DatasetSpec) -> Path:
+    """Path to a dataset's evidence bundle (mirrors generate_report.py's suffix)."""
+    return REPORTS_DIR / f"cluster_evidence{spec.suffix}.json"
+
+
+def _available_datasets() -> dict[str, Path]:
+    """Registry keys → bundle path, restricted to bundles that exist on disk.
+
+    Not cached: it's a cheap stat() and we want newly-generated bundles to appear
+    on the next rerun without clearing any cache.
+    """
+    return {
+        key: _bundle_path(spec)
+        for key, spec in io.DATASETS.items()
+        if _bundle_path(spec).exists()
+    }
+
+
 @st.cache_data(show_spinner=False)
 def _load_bundle(path: str) -> dict:
-    """Load the compact evidence bundle once (cached across reruns)."""
+    """Load one compact evidence bundle (cached per path across reruns)."""
     return chat.load_evidence_bundle(path)
 
 
@@ -52,33 +73,58 @@ st.set_page_config(page_title="Clonal Compass — chat", page_icon="🧭")
 st.title("🧭 Clonal Compass")
 st.caption(
     "Ask natural-language questions about the clusters and clones. "
-    "Answers are grounded in `reports/cluster_evidence.json` — a research "
+    "Answers are grounded in the selected dataset's evidence bundle — a research "
     "tool, not a diagnostic one."
 )
 
-if not BUNDLE_PATH.exists():
+available = _available_datasets()
+if not available:
     st.error(
-        f"Evidence bundle not found at `{BUNDLE_PATH}`. "
-        "Generate it first with `scripts/generate_report.py`."
+        "No evidence bundles found under `reports/`. Generate at least one with "
+        "`scripts/generate_report.py [--dataset pbmc|cancer]`."
     )
     st.stop()
 
-bundle = _load_bundle(str(BUNDLE_PATH))
-
-# Small orientation line so the demo shows what's loaded.
-ds = bundle.get("dataset", {})
+# --- Dataset selector (sidebar) -------------------------------------------- #
 st.sidebar.header("Dataset")
-st.sidebar.write(f"**Cells:** {ds.get('n_cells', '?')}")
-st.sidebar.write(f"**Clusters:** {ds.get('n_clusters', '?')}")
-st.sidebar.write(f"**TCR+ cells:** {ds.get('n_tcr_cells', '?')}")
+dataset_key = st.sidebar.selectbox(
+    "Active dataset",
+    options=list(available),
+    format_func=lambda k: io.DATASETS[k].display_name,
+    key="dataset_key",
+)
+
+# Each chat is grounded in ONE dataset, so switching invalidates prior turns
+# ("that cluster" would point at the other dataset's clusters). Reset on change.
+if st.session_state.get("active_dataset") != dataset_key:
+    st.session_state.active_dataset = dataset_key
+    st.session_state.messages = []
+
+bundle = _load_bundle(str(available[dataset_key]))
+
+# Orientation: name the loaded dataset and its headline stats.
+ds = bundle.get("dataset", {})
+
+
+def _fmt(key: str) -> str:
+    v = ds.get(key)
+    return f"{v:,}" if isinstance(v, int) else "?"
+
+
+st.sidebar.caption(ds.get("name", io.DATASETS[dataset_key].display_name))
+st.sidebar.write(f"**Cells:** {_fmt('n_cells')}")
+st.sidebar.write(f"**Clusters:** {_fmt('n_clusters')}")
+st.sidebar.write(f"**TCR+ cells:** {_fmt('n_tcr_cells')}")
 st.sidebar.caption(
     "Set `ANTHROPIC_API_KEY` before launching for live Claude answers; "
     "otherwise a deterministic fallback runs."
 )
 
+# Make the active dataset unmistakable in the main pane too.
+st.info(f"Answering about: **{ds.get('name', io.DATASETS[dataset_key].display_name)}**", icon=":material/database:")
+
 # Conversation history: list of {"role", "content", "source"?}.
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+st.session_state.setdefault("messages", [])
 
 # Replay the scrollable conversation history.
 for msg in st.session_state.messages:

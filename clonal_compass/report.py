@@ -139,7 +139,13 @@ def build_report_data(adata, adata_tcr) -> ReportData:
     )
 
 
-def write_evidence_json(adata, adata_tcr, data: ReportData, out_path: Path) -> Path:
+def write_evidence_json(
+    adata,
+    adata_tcr,
+    data: ReportData,
+    out_path: Path,
+    dataset_name: str = "10k Human PBMC 5' (GEX + VDJ)",
+) -> Path:
     """Serialize per-cluster evidence to a small, standalone JSON file.
 
     This is the *only* thing the chat interface needs to read — it never has to
@@ -167,7 +173,7 @@ def write_evidence_json(adata, adata_tcr, data: ReportData, out_path: Path) -> P
 
     payload = {
         "dataset": {
-            "name": "10k Human PBMC 5' (GEX + VDJ)",
+            "name": dataset_name,
             "n_cells": int(adata.n_obs),
             "n_genes": int(adata.n_vars),
             "n_clusters": int(adata.obs["leiden"].nunique()),
@@ -261,10 +267,12 @@ def _cluster_card(cr: ClusterReport) -> str:
     </section>"""
 
 
-def render_html(data: ReportData, figures_dir: Path, meta: dict) -> str:
+def render_html(data: ReportData, figures_dir: Path, meta: dict, suffix: str = "") -> str:
     figs = []
     for name, caption in FIGURES:
-        path = figures_dir / name
+        # Insert the dataset suffix before the extension (umap_x.png -> umap_x_cancer.png).
+        p = Path(name)
+        path = figures_dir / f"{p.stem}{suffix}{p.suffix}"
         if not path.exists():
             continue
         figs.append(

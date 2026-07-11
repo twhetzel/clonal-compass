@@ -20,6 +20,17 @@ Days 1–4 of the plan (below) are **done and verified end-to-end**:
 - **Day 4** — self-contained HTML + Markdown report, plus a compact per-cluster
   **evidence bundle** (`reports/cluster_evidence.json`, ~20 KB).
 
+**Second dataset added (additive, verified):** the same pipeline now runs on
+scirpy's built-in **"3k T cells from cancer"** (Wu et al. 2020, tumor-infiltrating
+T cells across lung/renal/colon/endometrial). Select with `--dataset {pbmc,cancer}`
+on both pipeline scripts (default `pbmc`); each dataset's artifacts get a filename
+suffix (`""` for PBMC, `_cancer` for cancer) so both coexist. No stage logic
+changed. Expansion is decisively different — cancer: **22.7%** of TCR+ cells in
+expanded clones (largest clone 20); PBMC baseline: **2.8%** (largest clone 9) —
+i.e. real tumor-driven clonal expansion, not healthy-donor noise. See
+"Dataset selection" below.
+
+**Active stretch goal:** a Streamlit chat interface (see "Chat interface" below).
 **Stretch goal — DONE:** the Streamlit chat interface is built and verified
 (see "Chat interface" below). It grounds every answer in the evidence bundle
 via Claude's tool-use loop, tags each answer with its source path, and now
@@ -39,10 +50,15 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
 ```
 
 **Package (`clonal_compass/`):**
-- `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`)
+- `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`). Also a small
+  **dataset registry** (`DatasetSpec`, `DATASETS`, `load_dataset(key)`) that
+  returns a uniform `(gex, tcr, spec)` for either `pbmc` (files on disk) or
+  `cancer` (scirpy's `wu2020_3k()` MuData, split into GEX + AIRR AnnData). `spec`
+  carries the display name + filename `suffix` the scripts use to keep both
+  datasets' outputs side by side.
 - `qc` — standard QC filtering (thresholds are function params, not hard-coded)
 - `cluster` — normalize → HVG → PCA → UMAP → Leiden (`flavor="igraph"`; leidenalg is **not** installed)
-- `markers` + `annotate` — marker-gene signatures → per-cluster lineage / T-subset labels via `sc.tl.score_genes`
+- `markers` + `annotate` — marker-gene signatures → per-cluster lineage / T-subset labels via `sc.tl.score_genes`. Signatures live in a **registry** (`markers.MARKER_SETS`: `pbmc` broad-lineage/subset panel, `cancer` TIL-state panel) selected per dataset via `DatasetSpec.marker_set`. `annotate_clusters()` takes the two signature dicts as params (default = PBMC); its scoring/labelling logic is unchanged and marker-set-agnostic.
 - `clonal` — clonotypes by **CDR3 amino-acid identity** (`ir.tl.define_clonotype_clusters`, aliased to `clone_id`) → clone size + expansion, merged onto GEX by barcode
 - `plots` — UMAP PNGs (captioned)
 - `interpret` — `ClusterEvidence`, `Interpretation`, `interpret_cluster()` (Claude API + fallback). Guardrails live in `SYSTEM_PROMPT`. Model `claude-opus-4-8`, adaptive thinking, effort high.
@@ -56,12 +72,46 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
 
 **Run the whole thing:**
 ```
-.venv/bin/python scripts/run_pipeline.py       # → data/processed + figures
-.venv/bin/python scripts/generate_report.py    # → reports/*
+.venv/bin/python scripts/run_pipeline.py       # → data/processed + figures  (PBMC, default)
+.venv/bin/python scripts/generate_report.py    # → reports/*                  (PBMC, default)
+.venv/bin/python scripts/run_pipeline.py    --dataset cancer   # Wu 2020 tumor T cells
+.venv/bin/python scripts/generate_report.py --dataset cancer   # → reports/*_cancer.*
 ```
 Set `ANTHROPIC_API_KEY` first for live Claude interpretations (else fallback).
 Outputs are all gitignored: `data/processed/`, `figures/`, `reports/`, and
 `data/reference/vdjdb.h5ad` (cached VDJdb reference).
+
+### Dataset selection
+- Both `run_pipeline.py` and `generate_report.py` take `--dataset {pbmc,cancer}`
+  (default `pbmc`). The choice flows through `io.load_dataset()`; **no stage
+  function changed** — QC → cluster → annotate → clonal → evidence bundle are
+  identical for both.
+- Artifacts are suffixed so datasets coexist: PBMC keeps the original unsuffixed
+  names (`gex_annotated.h5ad`, `cluster_evidence.json`, `umap_*.png`, …); cancer
+  writes the `_cancer` variants (`cluster_evidence_cancer.json`, etc.).
+- **Per-dataset marker sets.** The cancer path uses a **TIL-state signature
+  panel** (`markers.CANCER_*`), not the PBMC lineage panel. Two design points
+  worth knowing:
+  - Its lineage layer is a **single `T cell` entry** on purpose. Every cell in
+    this dataset is a T cell, and `score_genes` measures enrichment *against a
+    similarly-expressed background*, so in a pure-T population the pan-T score
+    has no contrast and lands near zero — a multi-lineage argmax then gets
+    decided by noise and mislabels real T cells as NK/B/myeloid (the old
+    behavior). Asserting the one true lineage routes every cluster into the
+    subset panel, where the real discrimination happens.
+  - The subset panel resolves tumor-relevant states the PBMC panel can't:
+    cytotoxic effector, exhausted/terminal, Treg, Tfh (CXCL13+), tissue-resident
+    memory, proliferating. Validated against canonical markers (Treg→FOXP3,
+    Tfh→CXCL13, TRM→ZNF683/ITGAE, cytotoxic→GZMB/GNLY, cycling→MKI67/TOP2A).
+    `STMN1` is deliberately **excluded** from the cycling signature — it's broadly
+    expressed in activated effectors and inflates the score for non-dividing cells.
+  - Nice consequence: the most clonally-expanded clusters now correctly label as
+    **CD8 cytotoxic effector** (they were mislabeled "NK" under the PBMC panel).
+  - Weakly-differentiated clusters can still land on a narrow-margin call (an
+    inherent property of score-based argmax, same as the PBMC path); the hedged
+    report + per-cluster `rank_genes_groups` are the backstop.
+- `wu2020_3k` has **0 `MT-` genes**, so the `max_pct_mt` QC filter is a harmless
+  no-op on it (2,992/3,000 cells kept on default thresholds).
 
 ### Gotchas & decisions already made
 - **Clonotypes are amino-acid based.** We switched from exact-nt
@@ -97,18 +147,40 @@ fallback runs). `streamlit==1.59.1` is pinned in `requirements.txt`.
   `interpret.interpret_cluster` (source → `"Claude API"` / `"deterministic
   fallback"`).
 - `scripts/ask.py` — one-shot CLI to ask a question from the terminal.
-- `app.py` — the Streamlit chat UI: scrollable history, a per-answer **source
-  badge** (green = `Claude API`, amber = `deterministic fallback`), and a
-  sidebar dataset summary. Loads the bundle once via `@st.cache_data`.
+- `app.py` — the Streamlit chat UI: a **sidebar dataset selector**, scrollable
+  history, a per-answer **source badge** (green = `Claude API`, amber =
+  `deterministic fallback`), and a sidebar dataset summary. Loads each bundle via
+  `@st.cache_data` (keyed by path).
+
+**Multi-dataset selection.** `app.py` discovers which `reports/cluster_evidence{suffix}.json`
+bundles exist (one per `io.DATASETS` entry) and offers them in a sidebar
+`selectbox` labelled by `display_name`. The active dataset's `name` + stats show
+in the sidebar and an `st.info` banner in the main pane, so it's always clear
+which dataset is loaded. Because each chat is grounded in ONE dataset, **switching
+datasets clears the conversation** (`st.session_state.messages`) — otherwise a
+follow-up like "that cluster" would resolve against the wrong dataset's clusters.
+Discovery is uncached (cheap `stat()`) so a newly-generated bundle appears on the
+next rerun.
 
 **Design constraints (all honored):**
-- **Reads only `reports/cluster_evidence.json`** — never opens the `.h5ad`
-  objects (those are hundreds of MB; the JSON is ~20 KB and loads instantly).
-  Regenerate the bundle with `generate_report.py`.
+- **Reads only the evidence bundle(s)** (`reports/cluster_evidence*.json`) — never
+  opens the `.h5ad` objects (those are hundreds of MB; each JSON is ~20 KB and
+  loads instantly). Regenerate with `generate_report.py [--dataset …]`.
 - Uses the Anthropic **tool-calling** loop: `chat.TOOLS` exposes
   `get_dataset_overview`, `list_clusters`, `get_cluster_evidence`,
   `get_epitope_matches` so Claude grounds every answer in the data rather than
   free-associating. Bounded by `_MAX_TOOL_ROUNDS = 6`.
+- **Epitope tool has two scopes — don't confuse them.** `get_epitope_matches`
+  called **without** `cluster_id` returns the **dataset-wide** matches (all TCR+
+  cells: the total count + every predicted specificity); called **with** a
+  `cluster_id` it returns only that cluster's **expanded-clone** hits (a strict
+  subset). A general "are there any epitope matches?" must use the no-cluster
+  form — the most-expanded clusters often have zero expanded-clone hits even when
+  the dataset has many (e.g. cancer: clusters 4/5 empty, but 42 matched cells
+  dataset-wide). The per-cluster empty note and a system-prompt line both warn
+  against generalizing a single cluster's empty list to the whole dataset. (This
+  was a real bug: the tool used to be per-cluster-only, so the chat wrongly
+  answered "no epitope matches".)
 - **Reuses the exact same guardrails** — `CHAT_SYSTEM_PROMPT` is
   `interpret.SYSTEM_PROMPT` + tool-use operating instructions only; no second,
   looser prompt. Same model/effort as `interpret.py`.
@@ -149,8 +221,11 @@ them the `pip install` fails on `parasail` with "autoreconf -fi failed".
 
 ## Data
 
-10x Genomics **10k Human PBMCs, 5' v2 (GEX + VDJ)** demo dataset. Files live
-in `data/raw/` (gitignored). Re-download with:
+Two datasets are wired up (select with `--dataset`; see "Dataset selection").
+
+**1. `pbmc` (default)** — 10x Genomics **10k Human PBMCs, 5' v2 (GEX + VDJ)**
+demo dataset (healthy donor). Files live in `data/raw/` (gitignored). Re-download
+with:
 
 ```
 curl -o data/raw/sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5 \
@@ -167,6 +242,13 @@ directory (not a `_t` subdirectory — that path 403s).
 `MuData`. Expected output: 10,548 cells × 36,601 genes, 5,328 TCR contigs,
 5,308 paired (~50%). Note: scirpy's old `merge_with_ir` was removed in
 v0.13 — use `MuData({"gex": ..., "airr": ...})`.
+
+**2. `cancer`** — scirpy's built-in **"3k T cells from cancer"** (Wu et al.
+2020): 3,000 tumor-infiltrating T cells downsampled across lung/renal/colon/
+endometrial patients (Tumor/NAT/Blood). No download step — fetched and cached
+by scirpy via `ir.datasets.wu2020_3k()` (a MuData with `gex` raw-count +
+`airr` modalities; `io._load_cancer()` splits them). All 3,000 cells are
+TCR-containing and already barcode-paired.
 
 ## Project brief
 

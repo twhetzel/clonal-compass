@@ -29,14 +29,28 @@ def _score_signatures(adata, signatures, prefix, seed=0):
         )
 
 
-def annotate_clusters(adata, cluster_key: str = "leiden"):
+def annotate_clusters(
+    adata,
+    cluster_key: str = "leiden",
+    lineage_markers: dict | None = None,
+    tcell_subset_markers: dict | None = None,
+):
     """Assign a lineage and a refined cell_type label to each cluster.
 
     Writes `.obs['lineage']` (broad) and `.obs['cell_type']` (T subsets where
     applicable). Returns the same AnnData.
+
+    The signature dicts are parameters so a caller can swap in a dataset-specific
+    marker set (see `markers.MARKER_SETS`); they default to the PBMC set. The
+    scoring/labelling logic itself is unchanged and marker-set-agnostic.
     """
-    _score_signatures(adata, LINEAGE_MARKERS, "lineage")
-    _score_signatures(adata, TCELL_SUBSET_MARKERS, "tsub")
+    if lineage_markers is None:
+        lineage_markers = LINEAGE_MARKERS
+    if tcell_subset_markers is None:
+        tcell_subset_markers = TCELL_SUBSET_MARKERS
+
+    _score_signatures(adata, lineage_markers, "lineage")
+    _score_signatures(adata, tcell_subset_markers, "tsub")
 
     obs = adata.obs
     lineage_cols = [c for c in obs.columns if c.startswith("lineage:")]
