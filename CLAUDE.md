@@ -49,6 +49,10 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
                                        reports/cluster_evidence.json
 ```
 
+> A rendered **Mermaid architecture diagram** (both datasets → shared registry →
+> pipeline → report → chat) lives in [`docs/architecture.md`](docs/architecture.md).
+> Keep it in sync when the data flow changes.
+
 **Package (`clonal_compass/`):**
 - `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`). Also a small
   **dataset registry** (`DatasetSpec`, `DATASETS`, `load_dataset(key)`) that
