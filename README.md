@@ -81,6 +81,10 @@ Clonal Compass is built around a specific concern: LLMs summarizing biological r
 - No automated test suite — verification has been manual (data sanity checks, targeted question testing), not unit/integration tests.
 - LLM outputs should be spot-checked, not trusted blindly — guardrails were tested extensively during development, but Claude's interpretations aren't immune to occasional inconsistency, especially on data outside our testing.
 
+# Demo Materials
+- [Demo slides](docs/slides/clonal-compass-demo.pdf)
+- [Demo video]()
+
 ## Sample Reports
 
 Reviewers can inspect example outputs without running the pipeline:
