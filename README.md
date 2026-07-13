@@ -1,6 +1,6 @@
 # Clonal Compass
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
 Clonal Compass is a single-cell immune-repertoire co-pilot for 
 paired scRNA-seq + TCR-seq data. It turns standard repertoire-analysis outputs 
@@ -58,4 +58,4 @@ See `CLAUDE.md` for the full project brief, environment details, and the
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE.md) for details.
