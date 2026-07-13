@@ -42,6 +42,9 @@ from clonal_compass import chat, io  # noqa: E402
 ROOT = Path(__file__).resolve().parent
 REPORTS_DIR = ROOT / "reports"
 FIGURES_DIR = ROOT / "figures"
+ASSETS_DIR = ROOT / "assets"
+LOGO_PATH = ASSETS_DIR / "clonal_compass_logo.png"
+FAVICON_PATH = ASSETS_DIR / "favicon.png"
 
 # The Day-2 UMAPs, in display order: (base filename, short tab label, caption).
 # Mirrors report.FIGURES; kept local so the lightweight chat app never imports
@@ -281,13 +284,20 @@ section[data-testid="stSidebar"]{width:440px!important;min-width:440px!important
 margin-left:5px;vertical-align:middle;opacity:.65}
 .cc-copy:hover{color:var(--accent);opacity:1}
 
-/* --- sticky main header (hero + label + hint) stays put while the chat
-       scrolls beneath it; solid bg + top z-index so messages mask cleanly,
-       and a divider line marks where the chat scrolls under --- */
+/* --- sidebar identity block (top of the left panel) --- */
+/* collapse the sidebar's default top spacing so its hero lines up with the
+   main header (this is the wrapper that was pushing content down) */
+[data-testid="stSidebarHeader"]{padding-top:0!important;padding-bottom:0!important}
+.cc-sidehero h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em;color:var(--fg);
+display:flex;align-items:center;gap:9px}
+.cc-sidehero h1 .cc-logo{height:30px;width:auto;flex:0 0 auto;border-radius:6px}
+.cc-sidehero p{font-size:12.5px;color:var(--muted);margin:0 0 6px;line-height:1.45}
+
+/* --- sticky main header (label + hint) stays put while the chat scrolls
+       beneath it; solid bg + top z-index so messages mask cleanly, and a
+       divider line marks where the chat scrolls under --- */
 [data-testid="stElementContainer"]:has(.cc-mainhead){position:sticky;top:0;z-index:50;
 background:var(--bg);padding-top:.6rem;padding-bottom:26px;border-bottom:1px solid var(--line)}
-.cc-mainhead .cc-hero h1{font-size:24px}
-.cc-mainhead .cc-hero p{font-size:13.5px}
 .cc-mainhead .cc-hint{margin:0}
 
 /* --- restyle native chat bubbles onto the report palette --- */
@@ -300,7 +310,8 @@ border-radius:12px;padding:12px 16px}
 # --------------------------------------------------------------------------- #
 # Page
 # --------------------------------------------------------------------------- #
-st.set_page_config(page_title="Clonal Compass", page_icon="🧭", layout="wide")
+_page_icon = str(FAVICON_PATH) if FAVICON_PATH.exists() else "🧭"
+st.set_page_config(page_title="Clonal Compass", page_icon=_page_icon, layout="wide")
 st.markdown(_STYLE, unsafe_allow_html=True)
 
 available = _available_datasets()
@@ -312,6 +323,7 @@ if not available:
     st.stop()
 
 # --- Dataset selector (sidebar) -------------------------------------------- #
+hero_slot = st.sidebar.empty()  # identity block, filled after load (needs ds_name)
 st.sidebar.header("Dataset")
 dataset_key = st.sidebar.selectbox(
     "Active dataset",
@@ -332,6 +344,21 @@ if st.session_state.get("active_dataset") != dataset_key:
 bundle = _load_bundle(str(available[dataset_key]))
 ds = bundle.get("dataset", {})
 ds_name = ds.get("name", io.DATASETS[dataset_key].display_name)
+
+# Identity block, pinned at the very top of the sidebar.
+_logo_uri = _img_data_uri(str(LOGO_PATH)) if LOGO_PATH.exists() else ""
+_logo_img = (
+    f'<img class="cc-logo" src="{_logo_uri}" alt="Clonal Compass logo"/>'
+    if _logo_uri
+    else "🧭"
+)
+hero_slot.markdown(
+    f'<div class="cc cc-sidehero"><h1>{_logo_img}<span>Clonal Compass</span></h1>'
+    '<p>Single-cell immune-repertoire co-pilot &mdash; paired scRNA-seq + TCR-seq. '
+    'An <strong>exploratory research</strong> tool, not a diagnostic one. '
+    f'Answering about: <strong>{html.escape(ds_name)}</strong>.</p></div>',
+    unsafe_allow_html=True,
+)
 
 # --- Sidebar: dataset stats + visuals -------------------------------------- #
 # The sidebar is Streamlit's one natively-fixed, self-scrolling region, so the
@@ -381,10 +408,6 @@ _EXAMPLES = [
 
 st.markdown(
     '<div class="cc cc-mainhead">'
-    '<div class="cc-hero"><h1>🧭 Clonal Compass</h1>'
-    '<p>Single-cell immune-repertoire co-pilot &mdash; paired scRNA-seq + TCR-seq. '
-    'An <strong>exploratory research</strong> tool, not a diagnostic one. '
-    f'Answering about: <strong>{html.escape(ds_name)}</strong>.</p></div>'
     '<div class="cc-panel-label">Ask the repertoire</div>'
     '<div class="cc-hint">Try: '
     + " &nbsp;·&nbsp; ".join(_example(q) for q in _EXAMPLES)

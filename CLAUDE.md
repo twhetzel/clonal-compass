@@ -151,20 +151,39 @@ fallback runs). `streamlit==1.59.1` is pinned in `requirements.txt`.
   `interpret.interpret_cluster` (source → `"Claude API"` / `"deterministic
   fallback"`).
 - `scripts/ask.py` — one-shot CLI to ask a question from the terminal.
-- `app.py` — the Streamlit chat UI: a **sidebar dataset selector**, scrollable
-  history, a per-answer **source badge** (green = `Claude API`, amber =
-  `deterministic fallback`), and a sidebar dataset summary. Loads each bundle via
-  `@st.cache_data` (keyed by path).
+- `app.py` — the Streamlit app, now a **single fused surface: report visuals +
+  chat**. The **sidebar** holds the dataset `selectbox`, the dataset **stat
+  chips** (cells / clusters / TCR+ / VDJdb-matched), and a **tabbed "Repertoire
+  visuals" panel**: the four Day-2 UMAPs (loaded as base64 data-URIs straight
+  from `figures/`) plus an **Evidence tab** that re-renders the HTML report's
+  source-tagged cluster cards + dataset-wide epitope overview natively. The
+  **main pane** is a clean chat under a **sticky hero header** (title + "not a
+  diagnostic tool" disclaimer + which dataset is active), with example-question
+  hints and a per-answer **source badge** (green = `Claude API`, amber =
+  `deterministic fallback`). Nothing is recomputed — UMAP PNGs and every
+  stat/interpretation/epitope hit come from disk; bundles + figure data-URIs are
+  `@st.cache_data`-cached by path. Styling is **ported from `report.py` under a
+  `.cc` scope** so the live app and the static report read as one product, and
+  Streamlit's dev chrome (menu/footer/header/toolbar) is hidden via CSS for a
+  clean demo.
+- **Example-question copy buttons.** The hero's "Try:" hints each carry an inline
+  copy icon; a small `components.html` script (using `execCommand('copy')` on the
+  parent document, so no clipboard-write permission is needed) copies the plain
+  question text on click and flashes a ✓.
+- **`.streamlit/config.toml`** — a `light` theme keyed to the report's design
+  tokens (`--accent #2b6cb0`, `--bg #f7f8fb`, `--card #fff`, `--fg #1a1f2b`) so
+  the app matches the report out of the box, plus `toolbarMode = "minimal"` to
+  drop Streamlit's dev toolbar in recorded demos.
 
 **Multi-dataset selection.** `app.py` discovers which `reports/cluster_evidence{suffix}.json`
 bundles exist (one per `io.DATASETS` entry) and offers them in a sidebar
 `selectbox` labelled by `display_name`. The active dataset's `name` + stats show
-in the sidebar and an `st.info` banner in the main pane, so it's always clear
-which dataset is loaded. Because each chat is grounded in ONE dataset, **switching
-datasets clears the conversation** (`st.session_state.messages`) — otherwise a
-follow-up like "that cluster" would resolve against the wrong dataset's clusters.
-Discovery is uncached (cheap `stat()`) so a newly-generated bundle appears on the
-next rerun.
+in the sidebar, and the sticky hero header names the active dataset, so it's
+always clear which dataset is loaded. Because each chat is grounded in ONE
+dataset, **switching datasets clears the conversation** (`st.session_state.messages`)
+— otherwise a follow-up like "that cluster" would resolve against the wrong
+dataset's clusters. Discovery is uncached (cheap `stat()`) so a newly-generated
+bundle appears on the next rerun.
 
 **Design constraints (all honored):**
 - **Reads only the evidence bundle(s)** (`reports/cluster_evidence*.json`) — never
