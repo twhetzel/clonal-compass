@@ -89,8 +89,8 @@ Clonal Compass is built around a specific concern: LLMs summarizing biological r
 
 Reviewers can inspect example outputs without running the pipeline:
 
-- [PBMC baseline report](examples/reports/clonal_compass_report.html)
-- [Cancer TIL report](examples/reports/clonal_compass_report_cancer.html)
+- [PBMC baseline report](https://twhetzel.github.io/clonal-compass/reports/clonal_compass_report.html)
+- [Cancer TIL report](https://twhetzel.github.io/clonal-compass/reports/clonal_compass_report_cancer.html)
 
 ## License
 
