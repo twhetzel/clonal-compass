@@ -1,0 +1,23 @@
+# Clonal Compass — Streamlit theme.
+#
+# Keyed to the HTML report's design tokens (see clonal_compass/report.py `_CSS`)
+# so the live chat app and the static report read as one product:
+#   --fg   #1a1f2b   --bg   #f7f8fb   --card #ffffff   --accent #2b6cb0
+#
+# `toolbarMode = "minimal"` drops the developer toolbar so a recorded demo
+# doesn't show Streamlit's dev chrome; the remaining menu/footer/header are
+# hidden via CSS in app.py.
+
+[theme]
+base = "light"
+primaryColor = "#2b6cb0"            # report --accent (buttons, focus, links)
+backgroundColor = "#f7f8fb"         # report --bg   (main canvas)
+secondaryBackgroundColor = "#ffffff" # report --card (sidebar, inputs, chat bubbles)
+textColor = "#1a1f2b"               # report --fg
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
