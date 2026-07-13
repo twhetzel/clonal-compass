@@ -2,13 +2,65 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
-Clonal Compass is a single-cell immune-repertoire co-pilot for 
-paired scRNA-seq + TCR-seq data. It turns standard repertoire-analysis outputs 
-into a reviewable report with a grounded chat interface that helps immunologists 
-ask: which T-cell clones expanded, what transcriptional states are they 
-associated with, and what evidence supports that interpretation?
+Clonal Compass is a single-cell immune-repertoire co-pilot for paired scRNA-seq + TCR-seq data. It turns standard repertoire-analysis outputs into a reviewable report with a grounded chat interface that helps immunologists 
+ask: which T-cell clones expanded, what transcriptional states are they associated with, and what evidence 
+supports that interpretation?
 
 This project was created for the [Build with Claude: Life Sciences](https://cerebralvalley.ai/e/built-with-claude-life-sciences) hackathon.
+
+
+## Who This Is For
+
+Clonal Compass is built for immunologists and computational biologists working with paired scRNA-seq + TCR-seq data who need to connect clone expansion, transcriptional state, marker evidence, and epitope lookup results without manually stitching together multiple analysis outputs.
+
+
+## Demo Materials
+
+- [Demo slides](docs/slides/clonal-compass-demo.pdf)
+- [Demo video]()
+
+
+## Sample Reports
+
+Reviewers can inspect example outputs without running the pipeline:
+
+- [PBMC baseline report](https://twhetzel.github.io/clonal-compass/reports/clonal_compass_report.html)
+- [Cancer TIL report](https://twhetzel.github.io/clonal-compass/reports/clonal_compass_report_cancer.html)
+
+
+## Demo Preview
+
+The generated report separates computed evidence from cautious Claude-generated interpretation.
+![Example Clonal Compass report](assets/report_screenshot.png)
+
+The Streamlit interface lets a researcher ask questions against compact evidence bundles rather than the full raw dataset.
+![Clonal Compass chat interface](assets/app_screenshot.png)
+
+
+## What Clonal Compass Does
+
+Clonal Compass turns single-cell immune repertoire analysis results into a reviewable 
+interpretation packet.
+
+The pipeline:
+
+1. Loads paired single-cell gene-expression and TCR-seq analysis outputs.
+2. Computes clone expansion and cluster-level evidence using standard Python analysis tooling.
+3. Builds a compact evidence bundle with clone counts, cluster annotations, marker summaries, and optional epitope lookup results.
+4. Uses Claude to generate cautious, evidence-grounded interpretations from the computed bundle.
+5. Produces static HTML/Markdown reports and a Streamlit chat interface for asking questions about the results.
+
+Claude is not used as an ungrounded biology oracle. Quantitative claims come from computed evidence bundles, and generated interpretations are instructed to cite the observed evidence, hedge uncertainty, and avoid diagnostic or patient-level claims.
+
+
+## 60-Second Walkthrough
+
+1. Open one of the rendered sample reports to see the end-to-end output without running the pipeline.
+2. Compare the PBMC baseline report with the cancer TIL report to see how Clonal Compass handles different clonal expansion contexts.
+3. Review the evidence-grounded interpretation: clone expansion metrics, cluster annotations, marker evidence, and epitope lookup results are separated from Claude-generated interpretation.
+4. Launch the Streamlit app to ask grounded questions about the precomputed evidence bundles.
+5. Run with an Anthropic API key for Claude-powered interpretation, or without one to use deterministic fallback summaries.
+
 
 ## Requirements
 
@@ -52,15 +104,31 @@ With the venv active, load the demo dataset and confirm it reads into AnnData:
 python scripts/load_data.py
 ```
 
+## Running the app
+### Run without API key
+Clonal Compass can run without an Anthropic API key using deterministic fallback summaries. This lets reviewers open the Streamlit app, inspect precomputed evidence bundles, and view sample reports without requiring Claude access. 
+
+If no API key is present, the app falls back to static, evidence-based summaries rather than failing.
+
+With the venv active, run the Streamlit app as:
+`streamlit run app.py`
+
+### Optional: enable Claude-powered interpretation
+To enable Claude-powered interpretation, set an Anthropic API key:
+```
+export ANTHROPIC_API_KEY=your_api_key_here
+streamlit run app.py
+```
+
 
 ## How Claude was used in this project
 This project used Claude across three different surfaces, each for a distinct purpose:
 
-<b>Claude Chat</b> — used for project scoping, architecture planning, and risk assessment before writing any code: comparing hackathon project ideas, breaking the build into a day-by-day plan with explicit checkpoints and fallback triggers, identifying and de-risking the biggest technical unknowns (environment/dependency setup, scientific overclaiming) ahead of time, and reviewing/interpreting results at each major milestone (UMAP sanity checks, clonotype definition tradeoffs, live-API guardrail verification) to catch issues early rather than after the fact.
+- <b>Claude Chat</b> — used for project scoping, architecture planning, and risk assessment before writing any code: comparing hackathon project ideas, breaking the build into a day-by-day plan with explicit checkpoints and fallback triggers, identifying and de-risking the biggest technical unknowns (environment/dependency setup, scientific overclaiming) ahead of time, and reviewing/interpreting results at each major milestone (UMAP sanity checks, clonotype definition tradeoffs, live-API guardrail verification) to catch issues early rather than after the fact.
 
-<b>Claude Code</b> — used to build the entire pipeline and application: environment setup and dependency debugging (including diagnosing a Python version mismatch and fixing two real upstream bugs — a broken scirpy VDJdb loader path, and an epitope-matching tool that generalized a per-cluster "no match" into an incorrect dataset-wide "no match"), the Scanpy/scirpy analysis pipeline (QC, clustering, T-cell subset annotation, clonal expansion metrics), the report generation layer, and the Streamlit chat interface — including diagnosing a dataset-specific marker annotation failure and building a corrected, per-dataset marker registry as the fix.
+- <b>Claude Code</b> — used to build the entire pipeline and application: environment setup and dependency debugging (including diagnosing a Python version mismatch and fixing two real upstream bugs — a broken scirpy VDJdb loader path, and an epitope-matching tool that generalized a per-cluster "no match" into an incorrect dataset-wide "no match"), the Scanpy/scirpy analysis pipeline (QC, clustering, T-cell subset annotation, clonal expansion metrics), the report generation layer, and the Streamlit chat interface — including diagnosing a dataset-specific marker annotation failure and building a corrected, per-dataset marker registry as the fix.
 
-<b>Claude API</b> (via the Anthropic Python SDK, claude-opus-4-8 with adaptive thinking) — the core scientific differentiator of the tool itself, called directly from the pipeline code (not just used to build it) to generate plain-language, guardrail-compliant interpretations of T-cell clusters and clonal expansion patterns, and to power a tool-using conversational agent that looks up only the specific evidence needed to answer a given question (rather than receiving the full dataset every time), grounded against VDJdb epitope data. A deterministic, guardrail-compliant fallback path ensures the pipeline runs end-to-end even without an API key.
+- <b>Claude API</b> (via the Anthropic Python SDK, claude-opus-4-8 with adaptive thinking) — the core scientific differentiator of the tool itself, called directly from the pipeline code (not just used to build it) to generate plain-language, guardrail-compliant interpretations of T-cell clusters and clonal expansion patterns, and to power a tool-using conversational agent that looks up only the specific evidence needed to answer a given question (rather than receiving the full dataset every time), grounded against VDJdb epitope data. A deterministic, guardrail-compliant fallback path ensures the pipeline runs end-to-end even without an API key.
 
 ## Why this is designed to be cautious
 Clonal Compass is built around a specific concern: LLMs summarizing biological results can sound confident even when the underlying evidence is weak or ambiguous. Several things are built in to guard against that:
@@ -81,12 +149,11 @@ Clonal Compass is built around a specific concern: LLMs summarizing biological r
 - No automated test suite — verification has been manual (data sanity checks, targeted question testing), not unit/integration tests.
 - LLM outputs should be spot-checked, not trusted blindly — guardrails were tested extensively during development, but Claude's interpretations aren't immune to occasional inconsistency, especially on data outside our testing.
 
-## Sample Reports
 
-Reviewers can inspect example outputs without running the pipeline:
+## Architecture
 
-- [PBMC baseline report](https://twhetzel.github.io/clonal-compass/reports/clonal_compass_report.html)
-- [Cancer TIL report](https://twhetzel.github.io/clonal-compass/reports/clonal_compass_report_cancer.html)
+For more detail on the pipeline design, evidence-bundle structure, and chat architecture, see [Architecture](docs/architecture.md).
+
 
 ## License
 
