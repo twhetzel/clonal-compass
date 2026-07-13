@@ -53,6 +53,13 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
 > pipeline → report → chat) lives in [`docs/architecture.md`](docs/architecture.md).
 > Keep it in sync when the data flow changes.
 
+> **`docs/` is also the GitHub Pages site** (`twhetzel.github.io/clonal-compass/`).
+> Unlike the gitignored working `/reports/`, `docs/index.html` and the **committed
+> snapshots** under `docs/reports/` (`clonal_compass_report.html`,
+> `clonal_compass_report_cancer.html`) are the *published* example reports the
+> README links to. Regenerate with `generate_report.py` and copy the fresh HTML
+> into `docs/reports/` when you want the public links to reflect new output.
+
 **Package (`clonal_compass/`):**
 - `io` — load GEX (`sc.read_10x_h5`) + TCR (`ir.io.read_10x_vdj`). Also a small
   **dataset registry** (`DatasetSpec`, `DATASETS`, `load_dataset(key)`) that
@@ -83,7 +90,9 @@ data/processed ──generate_report.py──▶ reports/clonal_compass_report.h
 ```
 Set `ANTHROPIC_API_KEY` first for live Claude interpretations (else fallback).
 Outputs are all gitignored: `data/processed/`, `figures/`, `reports/`, and
-`data/reference/vdjdb.h5ad` (cached VDJdb reference).
+`data/reference/vdjdb.h5ad` (cached VDJdb reference). (The published example
+reports under `docs/reports/` are the exception — those are committed snapshots;
+see the GitHub Pages note above.)
 
 ### Dataset selection
 - Both `run_pipeline.py` and `generate_report.py` take `--dataset {pbmc,cancer}`
@@ -166,6 +175,12 @@ fallback runs). `streamlit==1.59.1` is pinned in `requirements.txt`.
   `.cc` scope** so the live app and the static report read as one product, and
   Streamlit's dev chrome (menu/footer/header/toolbar) is hidden via CSS for a
   clean demo.
+- **Branding.** The app's logo lives in `assets/`: `clonal_compass_logo.png`
+  (512×512) renders inline next to the "Clonal Compass" title in the sidebar
+  identity block (base64 data-URI via the same `_img_data_uri` helper as the
+  UMAPs), and `assets/favicon.png` (a 64×64 downscale of the logo) is the
+  browser-tab `page_icon`. Both fall back to the 🧭 emoji if the files are
+  missing. `assets/` is committed (not gitignored).
 - **Example-question copy buttons.** The hero's "Try:" hints each carry an inline
   copy icon; a small `components.html` script (using `execCommand('copy')` on the
   parent document, so no clipboard-write permission is needed) copies the plain
