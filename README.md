@@ -4,12 +4,11 @@
 
 Clonal Compass is a single-cell immune-repertoire co-pilot for 
 paired scRNA-seq + TCR-seq data. It turns standard repertoire-analysis outputs 
-into a reviewable report and grounded chat interface that helps immunologists 
+into a reviewable report with a grounded chat interface that helps immunologists 
 ask: which T-cell clones expanded, what transcriptional states are they 
 associated with, and what evidence supports that interpretation?
 
-Build with Claude: Life Sciences hackathon project — a single-cell immune
-repertoire co-pilot for paired scRNA-seq + TCR-seq (10x 5' GEX + VDJ) data.
+This project was created for the [Build with Claude: Life Sciences](https://cerebralvalley.ai/e/built-with-claude-life-sciences) hackathon.
 
 ## Requirements
 
@@ -52,9 +51,6 @@ With the venv active, load the demo dataset and confirm it reads into AnnData:
 ```bash
 python scripts/load_data.py
 ```
-
-See `CLAUDE.md` for the full project brief, environment details, and the
-4-day plan.
 
 
 ## How Claude was used in this project
