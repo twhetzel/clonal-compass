@@ -2,13 +2,37 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
-Clonal Compass is a single-cell immune-repertoire co-pilot for 
-paired scRNA-seq + TCR-seq data. It turns standard repertoire-analysis outputs 
+Clonal Compass is a single-cell immune-repertoire co-pilot for paired 
+scRNA-seq + TCR-seq data. It turns standard repertoire-analysis outputs 
 into a reviewable report with a grounded chat interface that helps immunologists 
 ask: which T-cell clones expanded, what transcriptional states are they 
 associated with, and what evidence supports that interpretation?
 
 This project was created for the [Build with Claude: Life Sciences](https://cerebralvalley.ai/e/built-with-claude-life-sciences) hackathon.
+
+
+## Demo Materials
+
+- [Demo slides](docs/slides/clonal-compass-demo.pdf)
+- [Demo video]()
+
+
+## What Clonal Compass Does
+
+Clonal Compass turns single-cell immune repertoire analysis results into a reviewable 
+interpretation packet.
+
+The pipeline:
+
+1. Loads paired single-cell gene-expression and TCR-seq analysis outputs.
+2. Computes clone expansion and cluster-level evidence using standard Python analysis tooling.
+3. Builds a compact evidence bundle with clone counts, cluster annotations, marker summaries,
+and optional epitope lookup results.
+4. Uses Claude to generate cautious, evidence-grounded interpretations from the computed bundle.
+5. Produces static HTML/Markdown reports and a Streamlit chat interface for asking questions about the results.
+
+Claude is not used as an ungrounded biology oracle. Quantitative claims come from computed evidence bundles, and generated interpretations are instructed to cite the observed evidence, hedge uncertainty, and avoid diagnostic or patient-level claims.
+
 
 ## Requirements
 
@@ -52,6 +76,20 @@ With the venv active, load the demo dataset and confirm it reads into AnnData:
 python scripts/load_data.py
 ```
 
+## Run without API key
+Clonal Compass can run without an Anthropic API key using deterministic fallback summaries. This lets reviewers open the Streamlit app, inspect precomputed evidence bundles, and view sample reports without requiring Claude access.
+
+Run the Streamlit app as:
+`streamlit run app.py`
+
+To enable Claude-powered interpretation, set an Anthropic API key:
+```
+export ANTHROPIC_API_KEY=your_api_key_here
+streamlit run app.py
+```
+
+If no API key is present, the app falls back to static, evidence-based summaries rather than failing.
+
 
 ## How Claude was used in this project
 This project used Claude across three different surfaces, each for a distinct purpose:
@@ -81,9 +119,6 @@ Clonal Compass is built around a specific concern: LLMs summarizing biological r
 - No automated test suite — verification has been manual (data sanity checks, targeted question testing), not unit/integration tests.
 - LLM outputs should be spot-checked, not trusted blindly — guardrails were tested extensively during development, but Claude's interpretations aren't immune to occasional inconsistency, especially on data outside our testing.
 
-# Demo Materials
-- [Demo slides](docs/slides/clonal-compass-demo.pdf)
-- [Demo video]()
 
 ## Sample Reports
 
