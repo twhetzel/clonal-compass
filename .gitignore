@@ -228,4 +228,4 @@ data/
 figures/
 
 # Generated interpretation reports (pipeline outputs)
-reports/
+/reports/

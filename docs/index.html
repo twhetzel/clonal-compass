@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Clonal Compass</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 900px;
+            margin: 3rem auto;
+            padding: 0 1.5rem;
+            line-height: 1.6;
+        }
+
+        h1 {
+            margin-bottom: 0.25rem;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: #555;
+            margin-top: 0;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+        }
+
+        a {
+            color: #0969da;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Clonal Compass</h1>
+    <p class="tagline">A grounded interpretation layer for single-cell immune repertoire analysis.</p>
+
+    <p>
+        Clonal Compass helps researchers interpret paired scRNA-seq and TCR-seq analysis outputs by combining
+        computed clone expansion, cluster evidence, marker summaries, and epitope database matches into
+        reviewable reports and a grounded chat interface.
+    </p>
+
+    <div class="card">
+        <h2>Sample Reports</h2>
+        <ul>
+            <li><a href="reports/pbmc_demo_report.html">PBMC baseline demo report</a></li>
+            <li><a href="reports/cancer_til_demo_report.html">Cancer TIL demo report</a></li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Project Links</h2>
+        <ul>
+            <li><a href="https://github.com/twhetzel/clonal-compass">GitHub repository</a></li>
+            <li><a href="https://github.com/twhetzel/clonal-compass/blob/main/README.md">README</a></li>
+            <li><a href="https://github.com/twhetzel/clonal-compass/blob/main/docs/architecture.md">Architecture
+                    notes</a></li>
+        </ul>
+    </div>
+
+    <p>
+        Clonal Compass is intended for exploratory research support only. It reports computed evidence and
+        flags uncertainty; it does not make diagnostic, therapeutic, or patient-level claims.
+    </p>
+</body>
+
+</html>
