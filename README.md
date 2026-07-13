@@ -30,9 +30,11 @@ Reviewers can inspect example outputs without running the pipeline:
 
 ## Demo Preview
 
-![Clonal Compass chat interface](assets/app_screenshot.png)
-
+The generated report separates computed evidence from cautious Claude-generated interpretation.
 ![Example Clonal Compass report](assets/report_screenshot.png)
+
+The Streamlit interface lets a researcher ask questions against compact evidence bundles rather than the full raw dataset.
+![Clonal Compass chat interface](assets/app_screenshot.png)
 
 
 ## What Clonal Compass Does
@@ -49,6 +51,15 @@ The pipeline:
 5. Produces static HTML/Markdown reports and a Streamlit chat interface for asking questions about the results.
 
 Claude is not used as an ungrounded biology oracle. Quantitative claims come from computed evidence bundles, and generated interpretations are instructed to cite the observed evidence, hedge uncertainty, and avoid diagnostic or patient-level claims.
+
+
+## 60-Second Walkthrough
+
+1. Open one of the rendered sample reports to see the end-to-end output without running the pipeline.
+2. Compare the PBMC baseline report with the cancer TIL report to see how Clonal Compass handles different clonal expansion contexts.
+3. Review the evidence-grounded interpretation: clone expansion metrics, cluster annotations, marker evidence, and epitope lookup results are separated from Claude-generated interpretation.
+4. Launch the Streamlit app to ask grounded questions about the precomputed evidence bundles.
+5. Run with an Anthropic API key for Claude-powered interpretation, or without one to use deterministic fallback summaries.
 
 
 ## Requirements
@@ -95,7 +106,9 @@ python scripts/load_data.py
 
 ## Running the app
 ### Run without API key
-Clonal Compass can run without an Anthropic API key using deterministic fallback summaries. This lets reviewers open the Streamlit app, inspect precomputed evidence bundles, and view sample reports without requiring Claude access.
+Clonal Compass can run without an Anthropic API key using deterministic fallback summaries. This lets reviewers open the Streamlit app, inspect precomputed evidence bundles, and view sample reports without requiring Claude access. 
+
+If no API key is present, the app falls back to static, evidence-based summaries rather than failing.
 
 With the venv active, run the Streamlit app as:
 `streamlit run app.py`
@@ -106,8 +119,6 @@ To enable Claude-powered interpretation, set an Anthropic API key:
 export ANTHROPIC_API_KEY=your_api_key_here
 streamlit run app.py
 ```
-
-If no API key is present, the app falls back to static, evidence-based summaries rather than failing.
 
 
 ## How Claude was used in this project
